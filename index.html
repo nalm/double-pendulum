@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<title>Double Pendulum — Chaos Simulation</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0f;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Segoe UI', sans-serif;
+    color: #ccc;
+  }
+  h1 {
+    font-size: 1.1rem;
+    letter-spacing: 0.15em;
+    color: #888;
+    margin-bottom: 12px;
+    text-transform: uppercase;
+  }
+  #c {
+    border-radius: 8px;
+    background: #0d0d16;
+    box-shadow: 0 0 40px rgba(100,120,255,0.15);
+  }
+  #o {
+    background: transparent;
+  }
+  .controls {
+    margin-top: 14px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  button {
+    background: #1e1e30;
+    color: #aaa;
+    border: 1px solid #333;
+    padding: 7px 18px;
+    border-radius: 5px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    transition: all 0.2s;
+  }
+  button:hover { background: #2a2a44; color: #fff; border-color: #556; }
+  label { font-size: 0.8rem; color: #666; }
+  input[type=range] { width: 110px; accent-color: #6677ff; vertical-align: middle; }
+  .info {
+    font-size: 0.72rem;
+    color: #444;
+    margin-top: 8px;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+<h1>Double Pendulum · Chaos</h1>
+<p style="font-size:1rem;color:#bbb;margin-bottom:12px;letter-spacing:0.05em;">6.3 지방선거 - 후보는 유권자를 흔들고, 유권자는 후보의 동선에 영향을 주고.</p>
+<div id="wrap" style="position:relative;display:inline-block;">
+  <canvas id="c"></canvas>
+  <canvas id="o" style="position:absolute;top:0;left:0;pointer-events:none;border-radius:8px;"></canvas>
+</div>
+<div class="controls">
+  <button id="btnReset">Reset</button>
+  <button id="btnToggle">Pause</button>
+  <button id="btnClearTrail">Clear Trail</button>
+  <label>속도: <span id="speedLabel">8×</span>
+    <input type="range" id="sliderSpeed" min="1" max="8" value="8">
+  </label>
+  <label>
+    <input type="checkbox" id="chkDim"> 잔상 감쇠
+  </label>
+</div>
+<div class="info">
+  초기 각도가 아주 조금씩 다른 진자들 — 시간이 지날수록 궤적이 완전히 달라집니다 (카오스)
+</div>
+
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('o');
+const oct = overlay.getContext('2d');
+
+const SIZE = Math.min(window.innerWidth - 40, window.innerHeight - 140, 680);
+canvas.width = SIZE;
+canvas.height = SIZE;
+overlay.width = SIZE;
+overlay.height = SIZE;
+
+const CX = SIZE / 2;
+const CY = SIZE / 2.3;
+const L1 = SIZE * 0.22;
+const L2 = SIZE * 0.22;
+const M1 = 1, M2 = 1;
+const G = 9.81;
+
+let pendulums = [];
+let running = true;
+let trailDim = false;
+let simSpeed = 8;
+let pendulumCount = 1;
+const DT = 0.004;
+
+// 색상 팔레트 (무지개 스펙트럼)
+function hslColor(i, n, alpha) {
+  const h = (i / n) * 300 + 200;
+  return `hsla(${h}, 90%, 65%, ${alpha})`;
+}
+
+function makePendulum(i, n) {
+  const offset = (i / n) * 0.012 - 0.006;
+  return {
+    a1: Math.PI / 2 + 0.1 + offset,
+    a2: Math.PI / 2 + 0.1,
+    v1: 0,
+    v2: 0,
+    trail1: [],  // 후보 궤적
+    trail: [],   // 유권자 궤적
+    color: hslColor(i, n, 1.0),
+  };
+}
+
+function initPendulums() {
+  pendulums = [];
+  for (let i = 0; i < pendulumCount; i++) {
+    pendulums.push(makePendulum(i, pendulumCount));
+  }
+}
+
+function step(p) {
+  const { a1, a2, v1, v2 } = p;
+  const d = a1 - a2;
+  const cosd = Math.cos(d), sind = Math.sin(d);
+
+  const denom = 2 * M1 + M2 - M2 * Math.cos(2 * d);
+
+  const a1acc = (
+    -G * (2 * M1 + M2) * Math.sin(a1)
+    - M2 * G * Math.sin(a1 - 2 * a2)
+    - 2 * sind * M2 * (v2 * v2 * L2 + v1 * v1 * L1 * cosd)
+  ) / (L1 * denom);
+
+  const a2acc = (
+    2 * sind * (
+      v1 * v1 * L1 * (M1 + M2)
+      + G * (M1 + M2) * Math.cos(a1)
+      + v2 * v2 * L2 * M2 * cosd
+    )
+  ) / (L2 * denom);
+
+  p.v1 += a1acc * DT;
+  p.v2 += a2acc * DT;
+  p.a1 += p.v1 * DT;
+  p.a2 += p.v2 * DT;
+
+  const x1t = CX + L1 * Math.sin(p.a1);
+  const y1t = CY + L1 * Math.cos(p.a1);
+  const x2 = x1t + L2 * Math.sin(p.a2);
+  const y2 = CY + L1 * Math.cos(p.a1) + L2 * Math.cos(p.a2);
+  p.trail1.push({ x: x1t, y: y1t });
+  p.trail.push({ x: x2, y: y2 });
+
+  const MAX_TRAIL = 1800;
+  if (p.trail1.length > MAX_TRAIL) p.trail1.shift();
+  if (p.trail.length > MAX_TRAIL) p.trail.shift();
+}
+
+function drawSingleTrail(trail, hue, saturation) {
+  if (trail.length < 2) return;
+  const n = trail.length;
+  ctx.lineWidth = 1.3;
+  for (let i = 1; i < n; i++) {
+    const t = i / n;
+    ctx.strokeStyle = `hsla(${hue}, ${saturation}%, 65%, ${t * 0.85})`;
+    ctx.beginPath();
+    ctx.moveTo(trail[i - 1].x, trail[i - 1].y);
+    ctx.lineTo(trail[i].x, trail[i].y);
+    ctx.stroke();
+  }
+}
+
+function drawTrail(p) {
+  drawSingleTrail(p.trail1, 45, 90);   // 후보: 황금색
+  drawSingleTrail(p.trail, getHue(p.color), 85); // 유권자: 청록색
+}
+
+function getHue(hslStr) {
+  const m = hslStr.match(/hsla\((\d+)/);
+  return m ? +m[1] : 200;
+}
+
+function drawLabels() {
+  if (pendulums.length === 0) return;
+  const p = pendulums[0];
+  const x1 = CX + L1 * Math.sin(p.a1);
+  const y1 = CY + L1 * Math.cos(p.a1);
+  const x2 = x1 + L2 * Math.sin(p.a2);
+  const y2 = y1 + L2 * Math.cos(p.a2);
+
+  oct.save();
+  oct.font = 'bold 13px "Segoe UI", sans-serif';
+  oct.textAlign = 'center';
+  oct.textBaseline = 'middle';
+
+  // "후보" — 첫 번째 막대 중간, 수직 방향 오프셋
+  const mx1 = (CX + x1) / 2, my1 = (CY + y1) / 2;
+  const nx1 = -(y1 - CY), ny1 = x1 - CX;
+  const nl1 = Math.sqrt(nx1 * nx1 + ny1 * ny1) || 1;
+  const lox1 = (nx1 / nl1) * 20, loy1 = (ny1 / nl1) * 20;
+  oct.fillStyle = 'rgba(0,0,0,0.7)';
+  oct.fillRect(mx1 + lox1 - 26, my1 + loy1 - 12, 52, 24);
+  oct.fillStyle = '#ffdd88';
+  oct.fillText('후보', mx1 + lox1, my1 + loy1);
+
+  // "유권자" — 두 번째 막대 중간, 수직 방향 오프셋
+  const mx2 = (x1 + x2) / 2, my2 = (y1 + y2) / 2;
+  const nx2 = -(y2 - y1), ny2 = x2 - x1;
+  const nl2 = Math.sqrt(nx2 * nx2 + ny2 * ny2) || 1;
+  const lox2 = (nx2 / nl2) * 20, loy2 = (ny2 / nl2) * 20;
+  oct.fillStyle = 'rgba(0,0,0,0.7)';
+  oct.fillRect(mx2 + lox2 - 34, my2 + loy2 - 12, 68, 24);
+  oct.fillStyle = '#88ddff';
+  oct.fillText('유권자', mx2 + lox2, my2 + loy2);
+
+  oct.restore();
+}
+
+function drawPendulum(p) {
+  const x1 = CX + L1 * Math.sin(p.a1);
+  const y1 = CY + L1 * Math.cos(p.a1);
+  const x2 = x1 + L2 * Math.sin(p.a2);
+  const y2 = y1 + L2 * Math.cos(p.a2);
+
+  oct.strokeStyle = 'rgba(180,180,200,0.5)';
+  oct.lineWidth = 1.8;
+  oct.beginPath();
+  oct.moveTo(CX, CY);
+  oct.lineTo(x1, y1);
+  oct.lineTo(x2, y2);
+  oct.stroke();
+
+  oct.fillStyle = p.color;
+  oct.beginPath();
+  oct.arc(x1, y1, 5, 0, Math.PI * 2);
+  oct.fill();
+
+  oct.fillStyle = p.color;
+  oct.shadowColor = p.color;
+  oct.shadowBlur = 10;
+  oct.beginPath();
+  oct.arc(x2, y2, 5, 0, Math.PI * 2);
+  oct.fill();
+  oct.shadowBlur = 0;
+}
+
+function drawPivot() {
+  oct.fillStyle = '#888';
+  oct.beginPath();
+  oct.arc(CX, CY, 5, 0, Math.PI * 2);
+  oct.fill();
+}
+
+function render() {
+  // 잔상 캔버스: 궤적만 (잔상 효과 적용)
+  if (trailDim) {
+    ctx.fillStyle = 'rgba(13,13,22,0.06)';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+  } else {
+    ctx.clearRect(0, 0, SIZE, SIZE);
+    ctx.fillStyle = '#0d0d16';
+    ctx.fillRect(0, 0, SIZE, SIZE);
+  }
+  for (const p of pendulums) drawTrail(p);
+
+  // 오버레이 캔버스: 매 프레임 완전히 지우고 막대·레이블만 그림
+  oct.clearRect(0, 0, SIZE, SIZE);
+  for (const p of pendulums) drawPendulum(p);
+  drawPivot();
+  drawLabels();
+}
+
+let last = null;
+function loop(ts) {
+  if (!last) last = ts;
+  const elapsed = (ts - last) / 1000;
+  last = ts;
+
+  if (running) {
+    const steps = Math.round(elapsed / DT * simSpeed);
+    const cap = Math.min(steps, 80);
+    for (let s = 0; s < cap; s++) {
+      for (const p of pendulums) step(p);
+    }
+  }
+
+  render();
+  requestAnimationFrame(loop);
+}
+
+// 컨트롤
+document.getElementById('btnReset').onclick = () => {
+  initPendulums();
+};
+
+document.getElementById('btnToggle').onclick = function() {
+  running = !running;
+  this.textContent = running ? 'Pause' : 'Resume';
+};
+
+document.getElementById('btnClearTrail').onclick = () => {
+  for (const p of pendulums) { p.trail = []; p.trail1 = []; }
+};
+
+document.getElementById('sliderSpeed').oninput = function() {
+  simSpeed = +this.value;
+  document.getElementById('speedLabel').textContent = simSpeed + '×';
+};
+
+document.getElementById('chkDim').onchange = function() {
+  trailDim = this.checked;
+};
+
+initPendulums();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
