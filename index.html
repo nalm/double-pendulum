@@ -94,13 +94,15 @@ overlay.width = SIZE;
 overlay.height = SIZE;
 
 const CX = SIZE / 2;
-const CY = SIZE / 2.5;
-const L1 = SIZE * 0.18;
-const L2 = SIZE * 0.18;
+const CY = SIZE / 2;
+const L1 = SIZE * 0.13;
+const L2 = SIZE * 0.13;
+// 정삼각형 배치: 상단 중앙 꼭짓점, 하단 좌·우
+const TR = SIZE * 0.27;  // 외접원 반지름
 const PIVOTS = [
-  { x: CX - SIZE * 0.3, y: CY },
-  { x: CX,              y: CY },
-  { x: CX + SIZE * 0.3, y: CY },
+  { x: CX,                             y: CY - TR },           // 상단 중앙
+  { x: CX - TR * Math.sqrt(3) / 2,     y: CY + TR * 0.5 },    // 하단 왼쪽
+  { x: CX + TR * Math.sqrt(3) / 2,     y: CY + TR * 0.5 },    // 하단 오른쪽
 ];
 const M1 = 1, M2 = 1;
 const G = 9.81;
@@ -292,13 +294,23 @@ function render() {
     ctx.fillStyle = '#0d0d16';
     ctx.fillRect(0, 0, SIZE, SIZE);
   }
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, SIZE, SIZE);
+  ctx.clip();
   for (const p of pendulums) drawTrail(p);
+  ctx.restore();
 
   // 오버레이 캔버스: 매 프레임 완전히 지우고 막대·레이블만 그림
   oct.clearRect(0, 0, SIZE, SIZE);
+  oct.save();
+  oct.beginPath();
+  oct.rect(0, 0, SIZE, SIZE);
+  oct.clip();
   for (const p of pendulums) drawPendulum(p);
   drawPivot();
   drawLabels();
+  oct.restore();
 }
 
 let last = null;
