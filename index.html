@@ -104,25 +104,28 @@ let pendulums = [];
 let running = true;
 let trailDim = false;
 let simSpeed = 8;
-let pendulumCount = 1;
+let pendulumCount = 3;
 const DT = 0.004;
 
-// 색상 팔레트 (무지개 스펙트럼)
-function hslColor(i, n, alpha) {
-  const h = (i / n) * 300 + 200;
-  return `hsla(${h}, 90%, 65%, ${alpha})`;
-}
+// 쌍별 색상: [후보 hue, 유권자 hue]
+const PAIR_COLORS = [
+  { h1: 45,  h2: 190 },  // 황금 + 청록
+  { h1: 10,  h2: 130 },  // 주황-적 + 초록
+  { h1: 300, h2: 260 },  // 핑크 + 보라
+];
 
 function makePendulum(i, n) {
-  const offset = (i / n) * 0.012 - 0.006;
+  const offset = (i / (n - 1 || 1)) * 0.016 - 0.008;
+  const c = PAIR_COLORS[i % PAIR_COLORS.length];
   return {
     a1: Math.PI / 2 + 0.1 + offset,
     a2: Math.PI / 2 + 0.1,
     v1: 0,
     v2: 0,
-    trail1: [],  // 후보 궤적
-    trail: [],   // 유권자 궤적
-    color: hslColor(i, n, 1.0),
+    trail1: [],
+    trail: [],
+    h1: c.h1,
+    h2: c.h2,
   };
 }
 
@@ -186,8 +189,8 @@ function drawSingleTrail(trail, hue, saturation) {
 }
 
 function drawTrail(p) {
-  drawSingleTrail(p.trail1, 45, 90);   // 후보: 황금색
-  drawSingleTrail(p.trail, getHue(p.color), 85); // 유권자: 청록색
+  drawSingleTrail(p.trail1, p.h1, 90);
+  drawSingleTrail(p.trail,  p.h2, 85);
 }
 
 function getHue(hslStr) {
@@ -245,13 +248,16 @@ function drawPendulum(p) {
   oct.lineTo(x2, y2);
   oct.stroke();
 
-  oct.fillStyle = p.color;
+  const c1 = `hsla(${p.h1}, 90%, 65%, 1)`;
+  const c2 = `hsla(${p.h2}, 90%, 65%, 1)`;
+
+  oct.fillStyle = c1;
   oct.beginPath();
   oct.arc(x1, y1, 5, 0, Math.PI * 2);
   oct.fill();
 
-  oct.fillStyle = p.color;
-  oct.shadowColor = p.color;
+  oct.fillStyle = c2;
+  oct.shadowColor = c2;
   oct.shadowBlur = 10;
   oct.beginPath();
   oct.arc(x2, y2, 5, 0, Math.PI * 2);
