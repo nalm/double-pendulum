@@ -94,9 +94,14 @@ overlay.width = SIZE;
 overlay.height = SIZE;
 
 const CX = SIZE / 2;
-const CY = SIZE / 2.3;
-const L1 = SIZE * 0.22;
-const L2 = SIZE * 0.22;
+const CY = SIZE / 2.5;
+const L1 = SIZE * 0.18;
+const L2 = SIZE * 0.18;
+const PIVOTS = [
+  { x: CX - SIZE * 0.3, y: CY },
+  { x: CX,              y: CY },
+  { x: CX + SIZE * 0.3, y: CY },
+];
 const M1 = 1, M2 = 1;
 const G = 9.81;
 
@@ -117,6 +122,7 @@ const PAIR_COLORS = [
 function makePendulum(i, n) {
   const offset = (i / (n - 1 || 1)) * 0.016 - 0.008;
   const c = PAIR_COLORS[i % PAIR_COLORS.length];
+  const pv = PIVOTS[i % PIVOTS.length];
   return {
     a1: Math.PI / 2 + 0.1 + offset,
     a2: Math.PI / 2 + 0.1,
@@ -126,6 +132,8 @@ function makePendulum(i, n) {
     trail: [],
     h1: c.h1,
     h2: c.h2,
+    px: pv.x,
+    py: pv.y,
   };
 }
 
@@ -162,10 +170,10 @@ function step(p) {
   p.a1 += p.v1 * DT;
   p.a2 += p.v2 * DT;
 
-  const x1t = CX + L1 * Math.sin(p.a1);
-  const y1t = CY + L1 * Math.cos(p.a1);
+  const x1t = p.px + L1 * Math.sin(p.a1);
+  const y1t = p.py + L1 * Math.cos(p.a1);
   const x2 = x1t + L2 * Math.sin(p.a2);
-  const y2 = CY + L1 * Math.cos(p.a1) + L2 * Math.cos(p.a2);
+  const y2 = p.py + L1 * Math.cos(p.a1) + L2 * Math.cos(p.a2);
   p.trail1.push({ x: x1t, y: y1t });
   p.trail.push({ x: x2, y: y2 });
 
@@ -201,8 +209,8 @@ function getHue(hslStr) {
 function drawLabels() {
   if (pendulums.length === 0) return;
   const p = pendulums[0];
-  const x1 = CX + L1 * Math.sin(p.a1);
-  const y1 = CY + L1 * Math.cos(p.a1);
+  const x1 = p.px + L1 * Math.sin(p.a1);
+  const y1 = p.py + L1 * Math.cos(p.a1);
   const x2 = x1 + L2 * Math.sin(p.a2);
   const y2 = y1 + L2 * Math.cos(p.a2);
 
@@ -212,8 +220,8 @@ function drawLabels() {
   oct.textBaseline = 'middle';
 
   // "후보" — 첫 번째 막대 중간, 수직 방향 오프셋
-  const mx1 = (CX + x1) / 2, my1 = (CY + y1) / 2;
-  const nx1 = -(y1 - CY), ny1 = x1 - CX;
+  const mx1 = (p.px + x1) / 2, my1 = (p.py + y1) / 2;
+  const nx1 = -(y1 - p.py), ny1 = x1 - p.px;
   const nl1 = Math.sqrt(nx1 * nx1 + ny1 * ny1) || 1;
   const lox1 = (nx1 / nl1) * 20, loy1 = (ny1 / nl1) * 20;
   oct.fillStyle = 'rgba(0,0,0,0.7)';
@@ -235,15 +243,15 @@ function drawLabels() {
 }
 
 function drawPendulum(p) {
-  const x1 = CX + L1 * Math.sin(p.a1);
-  const y1 = CY + L1 * Math.cos(p.a1);
+  const x1 = p.px + L1 * Math.sin(p.a1);
+  const y1 = p.py + L1 * Math.cos(p.a1);
   const x2 = x1 + L2 * Math.sin(p.a2);
   const y2 = y1 + L2 * Math.cos(p.a2);
 
   oct.strokeStyle = 'rgba(180,180,200,0.5)';
   oct.lineWidth = 1.8;
   oct.beginPath();
-  oct.moveTo(CX, CY);
+  oct.moveTo(p.px, p.py);
   oct.lineTo(x1, y1);
   oct.lineTo(x2, y2);
   oct.stroke();
@@ -266,10 +274,12 @@ function drawPendulum(p) {
 }
 
 function drawPivot() {
-  oct.fillStyle = '#888';
-  oct.beginPath();
-  oct.arc(CX, CY, 5, 0, Math.PI * 2);
-  oct.fill();
+  for (const p of pendulums) {
+    oct.fillStyle = '#888';
+    oct.beginPath();
+    oct.arc(p.px, p.py, 5, 0, Math.PI * 2);
+    oct.fill();
+  }
 }
 
 function render() {
